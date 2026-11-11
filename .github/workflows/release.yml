@@ -6,7 +6,7 @@ name: Build & release desktop apps
 on:
   push:
     branches: [main]
-    paths: ['renderer/**', 'main.js', 'preload.js', 'package.json', 'package-lock.json', '.github/workflows/release.yml']
+    paths: ['renderer/**', 'build/icon.png', 'main.js', 'preload.js', 'package.json', 'package-lock.json', '.github/workflows/release.yml']
   workflow_dispatch:
 
 permissions:

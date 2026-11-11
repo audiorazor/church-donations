@@ -1,6 +1,6 @@
 {
   "name": "church-donations",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Log church donations and produce year-end giving letters",
   "main": "main.js",
   "scripts": {
@@ -26,7 +26,8 @@
     "mac": {
       "target": "dir",
       "category": "public.app-category.finance",
-      "minimumSystemVersion": "13.0"
+      "minimumSystemVersion": "13.0",
+      "icon": "build/icon.png"
     },
     "win": {
       "target": [
@@ -42,7 +43,8 @@
             "x64"
           ]
         }
-      ]
+      ],
+      "icon": "build/icon.png"
     },
     "nsis": {
       "oneClick": false,
