@@ -226,6 +226,7 @@
     for (const g of groups) {
       g.body = letterBody(data, g, year, letterDateIso);
       g.html = wrapLetters([g.body], g.filename);
+      g.stamp = `${g.addressee} · ${year} giving statement`;
     }
     return groups;
   }

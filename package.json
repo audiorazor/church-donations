@@ -1,6 +1,6 @@
 {
   "name": "church-donations",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Log church donations and produce year-end giving letters",
   "main": "main.js",
   "scripts": {
@@ -58,5 +58,8 @@
     "directories": {
       "output": "dist"
     }
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1"
   }
 }

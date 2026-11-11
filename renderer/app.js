@@ -462,8 +462,9 @@ function renderLetters() {
 async function exportLetters() {
   if (!ui.optIndividual && !ui.optCombined) return toast('Tick at least one of the two PDF options.', true);
   const payload = {
-    letters: ui.optIndividual ? currentLetters.map(l => ({ filename: l.filename, html: l.html })) : [],
-    combined: ui.optCombined ? { filename: `${ui.letterYear} Giving Letters - ALL (for printing)`, html: Logic.wrapLetters(currentLetters.map(l => l.body), `${ui.letterYear} Giving Letters`) } : null,
+    letters: currentLetters.map(l => ({ filename: l.filename, html: l.html, stamp: l.stamp })),
+    each: ui.optIndividual,
+    combined: ui.optCombined ? { filename: `${ui.letterYear} Giving Letters - ALL (for printing)` } : null,
   };
   toast('Creating PDFs…');
   try {

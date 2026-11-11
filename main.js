@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 
 const DATA_FILE = () => path.join(app.getPath('userData'), 'donations.json');
 const BACKUP_DIR = () => path.join(app.getPath('userData'), 'auto-backups');
@@ -42,40 +43,74 @@ function safeName(s) {
   return String(s).replace(/[<>:"/\\|?*\x00-\x1f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 120) || 'letter';
 }
 
-async function htmlToPdf(html, outFile) {
+// One hidden window is reused for every letter in an export. Creating and destroying a window per
+// letter sometimes made the next page load fail (ERR_FAILED), so loads are also retried.
+async function htmlToPdf(html, win) {
   const tmp = path.join(os.tmpdir(), `letter-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.html`);
   fs.writeFileSync(tmp, html, 'utf8');
-  const win = new BrowserWindow({ show: false, webPreferences: { javascript: false, sandbox: true } });
   try {
-    await win.loadFile(tmp);
-    const pdf = await win.webContents.printToPDF({
+    for (let attempt = 1; ; attempt++) {
+      try { await win.loadFile(tmp); break; }
+      catch (e) { if (attempt >= 3) throw e; await new Promise(r => setTimeout(r, 300 * attempt)); }
+    }
+    return await win.webContents.printToPDF({
       pageSize: 'Letter',
       printBackground: true,
       margins: { top: 0.9, bottom: 0.9, left: 1, right: 1 }, // inches
     });
-    fs.writeFileSync(outFile, pdf);
   } finally {
-    win.destroy();
     fs.unlink(tmp, () => {});
   }
+}
+
+// Letters longer than one page get a small "Name · 2026 giving statement · Page 2 of 3" line at the
+// bottom of every page, so loose pages can be matched back up.
+async function stampPages(pdfBytes, label) {
+  const doc = await PDFDocument.load(pdfBytes);
+  const pages = doc.getPages();
+  if (pages.length > 1) {
+    const font = await doc.embedFont(StandardFonts.TimesRoman);
+    const safe = String(label || '').replace(/[^\x20-\x7e\xa0-\xff]/g, '?'); // standard fonts cover Latin-1 only
+    pages.forEach((page, i) => {
+      const text = `${safe} \u00b7 Page ${i + 1} of ${pages.length}`;
+      const size = 8.5;
+      const w = font.widthOfTextAtSize(text, size);
+      page.drawText(text, { x: (page.getWidth() - w) / 2, y: 36, size, font, color: rgb(0.35, 0.35, 0.35) });
+    });
+  }
+  return doc;
 }
 
 async function exportLetters(folder, payload) {
   const written = [];
   const used = new Set();
+  const merged = payload.combined ? await PDFDocument.create() : null;
+  const win = new BrowserWindow({ show: false, webPreferences: { javascript: false, sandbox: true } });
+  try {
   for (const l of payload.letters) {
-    let base = safeName(l.filename);
-    let name = base;
-    let n = 2;
-    while (used.has(name.toLowerCase())) name = `${base} (${n++})`;
-    used.add(name.toLowerCase());
-    const out = path.join(folder, name + '.pdf');
-    await htmlToPdf(l.html, out);
-    written.push(out);
+    const doc = await stampPages(await htmlToPdf(l.html, win), l.stamp);
+    const bytes = await doc.save();
+    if (payload.each) {
+      let base = safeName(l.filename);
+      let name = base;
+      let n = 2;
+      while (used.has(name.toLowerCase())) name = `${base} (${n++})`;
+      used.add(name.toLowerCase());
+      const out = path.join(folder, name + '.pdf');
+      fs.writeFileSync(out, bytes);
+      written.push(out);
+    }
+    if (merged) {
+      const src = await PDFDocument.load(bytes);
+      for (const p of await merged.copyPages(src, src.getPageIndices())) merged.addPage(p);
+    }
   }
-  if (payload.combined) {
+  } finally {
+    win.destroy();
+  }
+  if (merged) {
     const out = path.join(folder, safeName(payload.combined.filename) + '.pdf');
-    await htmlToPdf(payload.combined.html, out);
+    fs.writeFileSync(out, await merged.save());
     written.push(out);
   }
   return written;

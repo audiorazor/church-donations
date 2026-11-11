@@ -33,12 +33,12 @@ module.exports = async ({ app, exportLetters, createWindow, getWindow, DATA_FILE
   // invalid amount must be rejected
   await js(`(()=>{const f=document.getElementById('giftForm');f.personId.value='24';f.amount.value='-5';f.requestSubmit();})()`); await wait(200);
   for (const p of ['donors', 'funds', 'settings', 'letters']) { await js(`document.querySelector('[data-page=${p}]').click()`); await wait(700); await shot(p); }
-  const groups = await js(`Logic.buildLetters(data, '2026', '2027-01-15').map(l=>({key:l.key,kind:l.kind,addressee:l.addressee,total:l.total,n:l.gifts.length,filename:l.filename,html:l.html,body:l.body}))`);
+  const groups = await js(`Logic.buildLetters(data, '2026', '2027-01-15').map(l=>({key:l.key,kind:l.kind,addressee:l.addressee,total:l.total,n:l.gifts.length,filename:l.filename,html:l.html,body:l.body,stamp:l.stamp}))`);
   await wait(400);
   const saved = JSON.parse(fs.readFileSync(DATA_FILE(), 'utf8'));
   const summary = { errs, giftCount: saved.gifts.length, newGift: saved.gifts.find(x => x.checkNo === '55'), letters: groups.map(({ html, body, ...r }) => r) };
   const pdfDir = path.join(out, 'pdf'); fs.mkdirSync(pdfDir, { recursive: true });
-  const written = await exportLetters(pdfDir, { letters: groups.map(l => ({ filename: l.filename, html: l.html })), combined: { filename: '2026 Giving Letters - ALL (for printing)', html: Logic.wrapLetters(groups.map(l => l.body), 'all') } });
+  const written = await exportLetters(pdfDir, { letters: groups.map(l => ({ filename: l.filename, html: l.html, stamp: l.stamp })), each: true, combined: { filename: '2026 Giving Letters - ALL (for printing)' } });
   summary.written = written.map(w => path.basename(w));
   fs.writeFileSync(path.join(out, 'summary.json'), JSON.stringify(summary, null, 2));
   app.exit(0);
