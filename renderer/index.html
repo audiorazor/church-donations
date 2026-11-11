@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; frame-src 'self' data: blob:; img-src 'self' data:">
+<title>Church Donations</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<nav id="nav">
+  <div class="brand">Church Donations</div>
+  <button data-page="gifts" class="active">Gifts</button>
+  <button data-page="donors">Donors</button>
+  <button data-page="funds">Funds</button>
+  <button data-page="letters">Year-end letters</button>
+  <button data-page="settings">Settings</button>
+  <div class="spacer"></div>
+  <div id="saveState" class="save-state"></div>
+</nav>
+<main id="main"></main>
+<div id="toast" class="toast" hidden></div>
+<script src="logic.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

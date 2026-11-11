@@ -1,0 +1,82 @@
+name: Build & release desktop apps
+
+# Every push to main that touches the app builds the Apple Silicon bundle and the Windows
+# installer/portable exe and publishes them as a GitHub Release tagged with the version in
+# package.json (e.g. v1.0.0). Re-pushing the same version updates that release's files in place.
+on:
+  push:
+    branches: [main]
+    paths: ['renderer/**', 'main.js', 'preload.js', 'package.json', 'package-lock.json', '.github/workflows/release.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Read version
+        id: ver
+        run: echo "tag=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Build Apple Silicon app
+        run: npx electron-builder --mac --arm64 --dir
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - name: Package (tar, not zip)
+        run: tar -czf ChurchDonations-AppleSilicon-Mac.tar.gz -C dist/mac-arm64 "Church Donations.app"
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: Church Donations ${{ steps.ver.outputs.tag }}
+          files: ChurchDonations-AppleSilicon-Mac.tar.gz
+          body: |
+            Apple Silicon Mac build (tar.gz) and Windows x64 build (Setup installer + Portable exe). Unsigned: macOS may need the commands below, Windows SmartScreen may need "More info → Run anyway".
+
+            ```
+            cd ~/Downloads && curl -LO https://github.com/${{ github.repository }}/releases/download/${{ steps.ver.outputs.tag }}/ChurchDonations-AppleSilicon-Mac.tar.gz
+            tar -xzf ChurchDonations-AppleSilicon-Mac.tar.gz && rm -rf "/Applications/Church Donations.app" && mv "Church Donations.app" /Applications/
+            xattr -cr "/Applications/Church Donations.app" && open "/Applications/Church Donations.app"
+            ```
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Read version
+        id: ver
+        shell: bash
+        run: echo "tag=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Allow symlinks (electron-builder's winCodeSign bundle needs Developer Mode)
+        run: reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" /t REG_DWORD /f /v AllowDevelopmentWithoutDevLicense /d 1
+      - name: Build Windows installer + portable exe
+        shell: bash
+        run: npx electron-builder --win --x64 --publish never 2>&1 | tee build-log.txt; test ${PIPESTATUS[0]} -eq 0
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - name: Keep the log where it can be read (on failure)
+        if: failure()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          files: build-log.txt
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: Church Donations ${{ steps.ver.outputs.tag }}
+          files: |
+            dist/ChurchDonations-Setup-Windows.exe
+            dist/ChurchDonations-Portable-Windows.exe

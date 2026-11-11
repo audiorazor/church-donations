@@ -1,0 +1,62 @@
+{
+  "name": "church-donations",
+  "version": "1.0.0",
+  "description": "Log church donations and produce year-end giving letters",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --mac --arm64 --dir"
+  },
+  "keywords": [],
+  "author": "Church Donations",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^45.3.0",
+    "electron-builder": "^26.18.0"
+  },
+  "productName": "Church Donations",
+  "build": {
+    "appId": "org.yellowframechurch.donations",
+    "productName": "Church Donations",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*"
+    ],
+    "mac": {
+      "target": "dir",
+      "category": "public.app-category.finance",
+      "minimumSystemVersion": "13.0"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "shortcutName": "Church Donations",
+      "artifactName": "ChurchDonations-Setup-Windows.${ext}"
+    },
+    "portable": {
+      "artifactName": "ChurchDonations-Portable-Windows.${ext}"
+    },
+    "directories": {
+      "output": "dist"
+    }
+  }
+}
