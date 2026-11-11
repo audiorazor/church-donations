@@ -62,3 +62,21 @@ dialog .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 1
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
 .grid2 .wide { grid-column: 1 / -1; }
 table.grid th.num { text-align: right; }
+
+.donor-pick { position: relative; min-width: 260px; }
+.donor-pick label { font-size: 12px; color: var(--muted); }
+.donor-list { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; margin-top: 3px; background: #fff; border: 1px solid #c3cad6; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.15); max-height: 300px; overflow: auto; }
+.donor-list .opt { display: flex; justify-content: space-between; gap: 12px; padding: 7px 10px; cursor: pointer; color: var(--ink); font-size: 14px; }
+.donor-list .opt .ad { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.donor-list .opt:hover, .donor-list .opt.on { background: #eef3fd; }
+.donor-list .more { padding: 7px 10px; color: var(--muted); font-size: 12px; }
+dialog.wide { width: 720px; }
+dialog.wide > h2 { margin-bottom: 4px; }
+details.hist { border: 1px solid var(--line); border-radius: 6px; margin-bottom: 8px; }
+details.hist summary { display: flex; gap: 16px; align-items: baseline; padding: 8px 12px; cursor: pointer; background: #fafbfc; border-radius: 6px; }
+details.hist summary .num { margin-left: auto; font-weight: 600; }
+details.hist table { margin: 4px 0 6px; }
+details.hist td, details.hist th { padding-left: 12px; }
+.donor-pick { display: flex; flex-direction: column; gap: 3px; }
+.donor-list { min-width: 380px; }
+.donor-list .opt .nm { white-space: nowrap; flex: none; }

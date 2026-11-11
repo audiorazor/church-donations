@@ -145,7 +145,7 @@
     .head .sub { font-size: 10pt; }
     .head .brand { display: inline-flex; align-items: center; gap: 6pt; margin-bottom: 4pt; }
     .head .brand img { height: 0.95in; width: auto; }
-    .head .brand .words { font-family: Arial, Helvetica, sans-serif; font-weight: bold; font-size: 11.5pt; line-height: 1.22; text-align: center; letter-spacing: .2pt; }
+    .head .brand .words { font-family: Arial, Helvetica, sans-serif; font-weight: bold; font-size: 11.5pt; line-height: 1.22; text-align: center; letter-spacing: .2pt; white-space: nowrap; }
     .date { margin-bottom: 14pt; }
     .addr { margin-bottom: 18pt; }
     p { margin: 0 0 10pt 0; }

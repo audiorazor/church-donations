@@ -17,6 +17,7 @@ function todayIso() {
 const ui = {
   giftYear: String(new Date().getFullYear()),
   giftSearch: '',
+  letterSearch: '',
   editGiftId: null,
   lastDate: todayIso(),
   lastType: 'check',
@@ -95,24 +96,67 @@ function openDialog(title, bodyHtml, onSubmit, submitLabel) {
   if (first) first.focus();
 }
 
+// ---------- donor search (shared) ----------
+function donorLabel(p) { return sortName(p); }
+function donorHaystack(p) {
+  const h = household(p.householdId) || {};
+  return [p.firstName, p.lastName, personName(p), sortName(p), h.name, h.address1, h.city, p.email].join(' ').toLowerCase();
+}
+// Every word typed must appear somewhere in the donor's name, household name, street, city or email.
+function findDonors(q, limit) {
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const all = peopleSorted();
+  const hits = words.length ? all.filter(p => { const hay = donorHaystack(p); return words.every(w => hay.includes(w)); }) : all;
+  return hits.slice(0, limit || 50);
+}
+
+const picker = { results: [], active: -1 };
+function pickerEls() {
+  return { text: document.getElementById('donorText'), list: document.getElementById('donorList'), hidden: main.querySelector('#giftForm input[name=personId]') };
+}
+function renderPicker(open) {
+  const { text, list } = pickerEls();
+  if (!text) return;
+  if (!open) { list.hidden = true; text.setAttribute('aria-expanded', 'false'); return; }
+  picker.results = findDonors(text.value, 50);
+  if (picker.active >= picker.results.length) picker.active = picker.results.length - 1;
+  const total = text.value.trim() ? null : data.people.length;
+  list.innerHTML = picker.results.length ? picker.results.map((p, i) => {
+    const h = household(p.householdId) || {};
+    const addr = [h.address1, h.city].filter(Boolean).join(', ');
+    return `<div class="opt ${i === picker.active ? 'on' : ''}" role="option" id="dopt${i}" data-pick="${p.id}" aria-selected="${i === picker.active}"><span class="nm">${esc(sortName(p))}</span><span class="ad">${esc(addr)}</span></div>`;
+  }).join('') + (total && total > 50 ? `<div class="more">Showing 50 of ${total}. Keep typing to narrow it down.</div>` : '')
+    : '<div class="more">No donor matches. Add them on the Donors page.</div>';
+  list.hidden = false;
+  text.setAttribute('aria-expanded', 'true');
+  if (picker.active >= 0) { const el = document.getElementById('dopt' + picker.active); if (el) { el.scrollIntoView({ block: 'nearest' }); text.setAttribute('aria-activedescendant', el.id); } }
+  else text.removeAttribute('aria-activedescendant');
+}
+function choosePicker(p) {
+  const { text, hidden } = pickerEls();
+  hidden.value = p.id; text.value = donorLabel(p);
+  renderPicker(false);
+  const next = main.querySelector('#giftForm select[name=type]');
+  if (next) next.focus();
+}
+
 // ---------- GIFTS ----------
 function giftFormHtml() {
   const g = ui.editGiftId ? data.gifts.find(x => x.id === ui.editGiftId) : null;
   const type = g ? g.type : ui.lastType;
   const activeFunds = data.funds.filter(f => f.active || (g && g.fundId === f.id));
   const fundSel = g ? g.fundId : (ui.lastFund && fund(ui.lastFund) && fund(ui.lastFund).active ? ui.lastFund : (activeFunds[0] || {}).id);
-  const donorOpts = peopleSorted().map(p => {
-    const h = household(p.householdId);
-    const extra = h && h.name && h.name !== personName(p) ? ` — ${h.name}` : '';
-    return `<option value="${p.id}" ${g && g.personId === p.id ? 'selected' : ''}>${esc(sortName(p) + extra)}</option>`;
-  }).join('');
+  const chosen = g ? person(g.personId) : null;
   const nc = type === 'noncash';
   return `
   <form id="giftForm" class="panel" autocomplete="off">
     <h2>${g ? 'Edit gift' : 'Record a gift'}</h2>
     <div class="row">
       <label class="f">Date<input type="date" name="date" required value="${esc(g ? g.date : ui.lastDate)}"></label>
-      <label class="f grow">Donor<select name="personId" required><option value="">Choose a donor…</option>${donorOpts}</select></label>
+      <div class="f grow donor-pick"><label for="donorText">Donor</label>
+        <input id="donorText" type="text" role="combobox" aria-expanded="false" aria-controls="donorList" aria-autocomplete="list" placeholder="Type a name or street…" value="${esc(chosen ? donorLabel(chosen) : '')}">
+        <input type="hidden" name="personId" value="${chosen ? chosen.id : ''}">
+        <div id="donorList" class="donor-list" role="listbox" hidden></div></div>
       <label class="f">Type<select name="type" id="giftType">
         <option value="check" ${type === 'check' ? 'selected' : ''}>Check</option>
         <option value="cash" ${type === 'cash' ? 'selected' : ''}>Cash</option>
@@ -186,7 +230,7 @@ function submitGift(form) {
   const v = Object.fromEntries(new FormData(form).entries());
   const personId = parseInt(v.personId, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v.date || '')) return toast('Enter a valid date.', true);
-  if (!person(personId)) return toast('Choose a donor.', true);
+  if (!person(personId)) return toast('Choose a donor from the list: type part of a name, then click it or press Enter.', true);
   const g = { personId, date: v.date, type: v.type, note: (v.note || '').trim() };
   if (v.type === 'noncash') {
     g.description = (v.description || '').trim();
@@ -214,8 +258,8 @@ function submitGift(form) {
   ui.giftYear = g.date.slice(0, 4);
   save();
   renderGifts();
-  const sel = main.querySelector('#giftForm select[name=personId]');
-  if (sel) sel.focus();
+  const dt = document.getElementById('donorText');
+  if (dt) dt.focus();
 }
 
 // ---------- DONORS ----------
@@ -236,7 +280,7 @@ function donorListHtml() {
         <td>${esc(personName(p))}</td>
         <td class="muted">${esc(p.email || '')}</td>
         <td class="num">${fmtMoney(ytd)}</td>
-        <td class="actions"><button class="link" data-action="editPerson" data-id="${p.id}">Edit</button><button class="link danger" data-action="deletePerson" data-id="${p.id}">Delete</button></td>
+        <td class="actions"><button class="link" data-action="history" data-id="${p.id}">History</button><button class="link" data-action="editPerson" data-id="${p.id}">Edit</button><button class="link danger" data-action="deletePerson" data-id="${p.id}">Delete</button></td>
       </tr>`;
     }).join('');
     const addr = hhAddress(h);
@@ -318,6 +362,29 @@ function householdDialog(h) {
   });
 }
 
+function historyDialog(p) {
+  const gifts = giftsOf(p.id).sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  const years = [...new Set(gifts.map(g => g.date.slice(0, 4)))];
+  const h = household(p.householdId) || {};
+  const all = gifts.filter(g => g.type !== 'noncash').reduce((s, g) => s + g.amount, 0);
+  const body = years.map(y => {
+    const yg = gifts.filter(g => g.date.slice(0, 4) === y);
+    const tot = yg.filter(g => g.type !== 'noncash').reduce((s, g) => s + g.amount, 0);
+    return `<details ${y === years[0] ? 'open' : ''} class="hist"><summary><strong>${y}</strong><span>${yg.length} gift${yg.length === 1 ? '' : 's'}</span><span class="num">${fmtMoney(tot)}</span></summary>
+      <table class="grid"><thead><tr><th>Date</th><th>Fund</th><th>Method</th><th class="num">Amount</th></tr></thead><tbody>${yg.map(g => `<tr><td>${esc(fmtDate(g.date))}</td><td>${g.type === 'noncash' ? '<span class="muted">—</span>' : esc((fund(g.fundId) || {}).name || '')}</td><td>${esc(methodLabel(g))}</td><td class="num">${g.type === 'noncash' ? esc(g.description) : fmtMoney(g.amount)}</td></tr>`).join('')}</tbody></table></details>`;
+  }).join('');
+  const dlg = document.createElement('dialog');
+  dlg.className = 'wide';
+  dlg.innerHTML = `<h2>Giving history: ${esc(personName(p))}</h2>
+    <div class="muted small" style="margin-bottom:12px">${esc(hhAddress(h) || 'No mailing address')} · ${gifts.length} gift${gifts.length === 1 ? '' : 's'} recorded · ${fmtMoney(all)} monetary in total</div>
+    ${body || '<div class="muted">No gifts recorded yet.</div>'}
+    <div class="foot"><button type="button" class="btn primary" data-close>Close</button></div>`;
+  document.body.appendChild(dlg);
+  dlg.querySelector('[data-close]').addEventListener('click', () => dlg.close());
+  dlg.addEventListener('close', () => dlg.remove());
+  dlg.showModal();
+}
+
 // ---------- FUNDS ----------
 function renderFunds() {
   const rows = data.funds.map(f => {
@@ -341,6 +408,16 @@ function renderFunds() {
 
 // ---------- LETTERS ----------
 let currentLetters = [];
+function letterRowsHtml() {
+  const words = ui.letterSearch.toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = words.length ? currentLetters.filter(l => { const hay = donorHaystack(l.people[0]); return words.every(w => hay.includes(w)); }) : currentLetters;
+  if (!shown.length) return '<div class="muted">No letter matches that search.</div>';
+  return `${words.length ? `<div class="small muted" style="margin-bottom:6px">${shown.length} of ${currentLetters.length} letters</div>` : ''}<table class="grid"><thead><tr><th>Addressed to</th><th class="num">Gifts</th><th class="num">Total</th><th></th></tr></thead><tbody>${shown.map(l => `<tr class="${l.key === ui.previewKey ? 'sel' : ''}">
+      <td>${esc(l.addressee)}${l.household.address1 ? '' : ' <span class="chip">no address</span>'}</td>
+      <td class="num">${l.gifts.length}</td>
+      <td class="num">${fmtMoney(l.total)}</td>
+      <td class="actions"><button class="link" data-action="previewLetter" data-key="${l.key}">Preview</button></td></tr>`).join('')}</tbody></table>`;
+}
 function renderLetters() {
   const years = Logic.yearsWithGifts(data);
   if (!ui.letterYear) ui.letterYear = years[0] || String(new Date().getFullYear());
@@ -353,11 +430,6 @@ function renderLetters() {
   if (noAddr) warns.push(`${noAddr} letter${noAddr === 1 ? ' has' : 's have'} no mailing address (marked below).`);
   if (!currentLetters.some(l => l.key === ui.previewKey)) ui.previewKey = currentLetters[0] ? currentLetters[0].key : null;
   const total = currentLetters.reduce((a, l) => a + l.total, 0);
-  const rows = currentLetters.map(l => `<tr class="${l.key === ui.previewKey ? 'sel' : ''}">
-      <td>${esc(l.addressee)}${l.household.address1 ? '' : ' <span class="chip">no address</span>'}</td>
-      <td class="num">${l.gifts.length}</td>
-      <td class="num">${fmtMoney(l.total)}</td>
-      <td class="actions"><button class="link" data-action="previewLetter" data-key="${l.key}">Preview</button></td></tr>`).join('');
   const preview = currentLetters.find(l => l.key === ui.previewKey);
   main.innerHTML = `
     <h1>Year-end letters</h1>
@@ -378,7 +450,7 @@ function renderLetters() {
         </div>
         <div class="panel">
           <div class="small muted" style="margin-bottom:8px">${currentLetters.length} letter${currentLetters.length === 1 ? '' : 's'} · ${fmtMoney(total)} total monetary giving</div>
-          ${currentLetters.length ? `<table class="grid"><thead><tr><th>Addressed to</th><th class="num">Gifts</th><th class="num">Total</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="muted">No gifts recorded for this year.</div>'}
+          ${currentLetters.length ? `<label class="f" style="margin-bottom:10px">Find a letter<input data-input="letterSearch" value="${esc(ui.letterSearch)}" placeholder="Name or street…"></label><div id="letterRows">${letterRowsHtml()}</div>` : '<div class="muted">No gifts recorded for this year.</div>'}
         </div>
       </div>
       <div class="panel"><h2>Preview${preview ? ': ' + esc(preview.addressee) : ''}</h2><iframe class="preview" id="preview" sandbox="" title="Letter preview"></iframe></div>
@@ -479,6 +551,8 @@ main.addEventListener('submit', e => {
 
 main.addEventListener('input', e => {
   const t = e.target;
+  if (t.id === 'donorText') { pickerEls().hidden.value = ''; picker.active = t.value.trim() ? 0 : -1; renderPicker(true); return; }
+  if (t.dataset.input === 'letterSearch') { ui.letterSearch = t.value; document.getElementById('letterRows').innerHTML = letterRowsHtml(); return; }
   if (t.dataset.input === 'giftSearch') { ui.giftSearch = t.value; document.getElementById('giftList').innerHTML = giftListHtml(); }
   else if (t.dataset.input === 'donorSearch') { ui.donorSearch = t.value; document.getElementById('donorList').innerHTML = donorListHtml(); }
   else if (t.dataset.setting && t.tagName !== 'SELECT') { data.settings[t.dataset.setting] = t.value; save(); }
@@ -516,6 +590,7 @@ const actions = {
     data.gifts = data.gifts.filter(x => x.id !== id); if (ui.editGiftId === id) ui.editGiftId = null; save(); renderGifts();
   },
   addPerson(id) { personDialog(id, null); },
+  history(id) { historyDialog(person(id)); },
   editPerson(id) { const p = person(id); personDialog(p.householdId, p); },
   deletePerson(id) {
     const p = person(id); const n = giftsOf(id).length;
@@ -600,3 +675,36 @@ main.addEventListener('click', e => {
   saveState.textContent = '';
   render();
 })();
+
+// ---------- donor picker events ----------
+main.addEventListener('keydown', e => {
+  if (e.target.id !== 'donorText') return;
+  const { list } = pickerEls();
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (list.hidden) { picker.active = 0; renderPicker(true); return; }
+    const n = picker.results.length; if (!n) return;
+    picker.active = e.key === 'ArrowDown' ? Math.min(n - 1, picker.active + 1) : Math.max(0, picker.active - 1);
+    renderPicker(true);
+  } else if (e.key === 'Enter') {
+    if (!list.hidden && picker.results[picker.active]) { e.preventDefault(); choosePicker(picker.results[picker.active]); }
+    else if (!pickerEls().hidden.value) { e.preventDefault(); picker.active = 0; renderPicker(true); }
+  } else if (e.key === 'Escape') { renderPicker(false); }
+});
+main.addEventListener('mousedown', e => {
+  const opt = e.target.closest('[data-pick]');
+  if (opt) { e.preventDefault(); choosePicker(person(parseInt(opt.dataset.pick, 10))); }
+});
+main.addEventListener('focusin', e => { if (e.target.id === 'donorText') { picker.active = -1; renderPicker(true); } });
+main.addEventListener('focusout', e => {
+  if (e.target.id !== 'donorText') return;
+  setTimeout(() => {
+    renderPicker(false);
+    const { text, hidden } = pickerEls();
+    if (text && !hidden.value) {
+      // Typed text that matches exactly one donor counts as choosing them.
+      const hits = text.value.trim() ? findDonors(text.value, 2) : [];
+      if (hits.length === 1) { hidden.value = hits[0].id; text.value = donorLabel(hits[0]); }
+    }
+  }, 120);
+});
