@@ -7,4 +7,5 @@ contextBridge.exposeInMainWorld('store', {
   exportBackup: () => ipcRenderer.invoke('backup:export'),
   importBackup: () => ipcRenderer.invoke('backup:import'),
   exportLetters: (payload) => ipcRenderer.invoke('letters:export', payload),
+  chooseLogo: () => ipcRenderer.invoke('logo:choose'),
 });

@@ -12,6 +12,8 @@
     cityStateZip: 'Fredon Township, NJ 07860',
     phone: '973-534-6786',
     ein: '22-1860836',
+    headerText: 'The Yellow Frame\nPresbyterian\nChurch',
+    logo: '', // image as a data: URL; '' = no logo. The app fills in the bundled drawing on first run.
   };
 
   function defaultData() {
@@ -96,9 +98,8 @@
     return String(text || '').replace(/\{(church|year|total)\}/g, (_m, k) => vars[k]);
   }
 
-  // Decide who gets which letter for a year.
-  // People set to "own letter" each get one. People set to "combined" share one letter per household.
-  // Nobody gets a letter unless they (or their combined group) have at least one gift that year.
+  // Every person with at least one gift in the year gets their own letter, even when they share
+  // an address (household) with someone else. The household only supplies the mailing address.
   function buildLetterGroups(data, year) {
     const y = String(year);
     const giftsByPerson = new Map();
@@ -108,40 +109,20 @@
       giftsByPerson.get(g.personId).push(g);
     }
     const groups = [];
-    for (const h of data.households) {
-      const members = data.people.filter(p => p.householdId === h.id);
-      const combined = members.filter(p => p.letterMode === 'household');
-      const own = members.filter(p => p.letterMode !== 'household');
-      const combinedGifts = combined.flatMap(p => giftsByPerson.get(p.id) || []);
-      if (combinedGifts.length) {
-        const multi = combined.length > 1;
-        groups.push({
-          key: 'h' + h.id,
-          kind: multi ? 'combined' : 'individual',
-          household: h,
-          people: combined,
-          gifts: combinedGifts,
-          addressee: multi ? (h.name || joinNames(combined.map(personName))) : personName(combined[0]),
-          salutation: joinNames(combined.map(p => p.firstName)),
-          sortKey: multi ? (combined[0].lastName + ' ' + (h.name || '')) : sortName(combined[0]),
-          fileLabel: multi ? (h.name || joinNames(combined.map(personName))) : sortName(combined[0]),
-        });
-      }
-      for (const p of own) {
-        const gifts = giftsByPerson.get(p.id) || [];
-        if (!gifts.length) continue;
-        groups.push({
-          key: 'p' + p.id,
-          kind: 'individual',
-          household: h,
-          people: [p],
-          gifts,
-          addressee: personName(p),
-          salutation: p.firstName,
-          sortKey: sortName(p),
-          fileLabel: sortName(p),
-        });
-      }
+    for (const p of data.people) {
+      const gifts = giftsByPerson.get(p.id) || [];
+      if (!gifts.length) continue;
+      const h = data.households.find(x => x.id === p.householdId) || {};
+      groups.push({
+        key: 'p' + p.id,
+        household: h,
+        people: [p],
+        gifts,
+        addressee: personName(p),
+        salutation: p.firstName,
+        sortKey: sortName(p),
+        fileLabel: sortName(p),
+      });
     }
     for (const gr of groups) {
       gr.gifts.sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
@@ -162,6 +143,9 @@
     .head { text-align: center; border-bottom: 1.5pt solid #000; padding-bottom: 8pt; margin-bottom: 18pt; }
     .head .name { font-size: 17pt; font-weight: bold; letter-spacing: .3pt; }
     .head .sub { font-size: 10pt; }
+    .head .brand { display: inline-flex; align-items: center; gap: 6pt; margin-bottom: 4pt; }
+    .head .brand img { height: 0.95in; width: auto; }
+    .head .brand .words { font-family: Arial, Helvetica, sans-serif; font-weight: bold; font-size: 11.5pt; line-height: 1.22; text-align: center; letter-spacing: .2pt; }
     .date { margin-bottom: 14pt; }
     .addr { margin-bottom: 18pt; }
     p { margin: 0 0 10pt 0; }
@@ -189,7 +173,11 @@
     const headSub = [s.address1, s.address2, s.cityStateZip, s.phone].filter(Boolean).map(esc).join(' &nbsp;•&nbsp; ');
 
     let out = `<section class="letter">`;
-    out += `<div class="head"><div class="name">${esc(s.churchName)}</div>${headSub ? `<div class="sub">${headSub}</div>` : ''}</div>`;
+    const words = String(s.headerText || '').trim() || s.churchName || '';
+    const top = s.logo && /^data:image\/(png|jpeg|gif|webp);base64,/.test(s.logo)
+      ? `<div class="brand"><img src="${esc(s.logo)}" alt="">${words ? `<div class="words">${words.split('\n').map(esc).join('<br>')}</div>` : ''}</div>`
+      : `<div class="name">${esc(s.churchName)}</div>`;
+    out += `<div class="head">${top}${headSub ? `<div class="sub">${headSub}</div>` : ''}</div>`;
     out += `<div class="date">${esc(longDate(letterDateIso))}</div>`;
     out += `<div class="addr">${addr}</div>`;
     out += `<p>Dear ${esc(group.salutation)},</p>`;

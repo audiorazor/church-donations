@@ -235,10 +235,6 @@ function donorListHtml() {
       return `<tr>
         <td>${esc(personName(p))}</td>
         <td class="muted">${esc(p.email || '')}</td>
-        <td><select data-change="letterMode" data-id="${p.id}" aria-label="Year-end letter for ${esc(personName(p))}">
-          <option value="individual" ${p.letterMode !== 'household' ? 'selected' : ''}>Own letter</option>
-          <option value="household" ${p.letterMode === 'household' ? 'selected' : ''}>Combined with household</option>
-        </select></td>
         <td class="num">${fmtMoney(ytd)}</td>
         <td class="actions"><button class="link" data-action="editPerson" data-id="${p.id}">Edit</button><button class="link danger" data-action="deletePerson" data-id="${p.id}">Delete</button></td>
       </tr>`;
@@ -247,7 +243,7 @@ function donorListHtml() {
     return `<div class="hh">
       <div class="hh-head"><span class="t">${esc(h.name || '(unnamed household)')}</span><span class="a">${addr ? esc(addr) : '<em>No mailing address</em>'}</span>
         <span class="actions"><button class="link" data-action="addPerson" data-id="${h.id}">Add person</button><button class="link" data-action="editHousehold" data-id="${h.id}">Edit household</button><button class="link danger" data-action="deleteHousehold" data-id="${h.id}">Delete</button></span></div>
-      <div class="hh-body">${ms.length ? `<table class="grid"><thead><tr><th>Person</th><th>Email</th><th>Year-end letter</th><th class="num">${year} given</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="muted" style="padding:8px 0">No people in this household.</div>'}</div>
+      <div class="hh-body">${ms.length ? `<table class="grid"><thead><tr><th>Person</th><th>Email</th><th class="num">${year} given</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="muted" style="padding:8px 0">No people in this household.</div>'}</div>
     </div>`;
   }).join('');
 }
@@ -270,7 +266,7 @@ function renderDonors() {
         <label class="f">ZIP<input name="zip" size="8"></label>
         <button class="btn primary" type="submit">Add donor</button>
       </div>
-      <p class="help">This creates a new household with one person. To add a spouse or family member at the same address, use "Add person" on the household below. Each person can get their own letter or share a combined household letter.</p>
+      <p class="help">This creates a new household with one person. To add a spouse or family member at the same address, use "Add person" on the household below. Everyone gets their own year-end letter; people in a household just share the mailing address.</p>
     </form>
     <div class="panel">
       <div class="row" style="margin-bottom:12px"><label class="f grow">Search donors<input data-input="donorSearch" value="${esc(ui.donorSearch)}" placeholder="Name, address, email…"></label></div>
@@ -284,7 +280,7 @@ function submitDonor(form) {
   if (!first || !last) return toast('Enter a first and last name.', true);
   const h = { id: newId(), name: `${first} ${last}`, address1: (v.address1 || '').trim(), address2: (v.address2 || '').trim(), city: (v.city || '').trim(), state: (v.state || '').trim().toUpperCase(), zip: (v.zip || '').trim() };
   data.households.push(h);
-  data.people.push({ id: newId(), householdId: h.id, firstName: first, lastName: last, email: (v.email || '').trim(), letterMode: 'individual' });
+  data.people.push({ id: newId(), householdId: h.id, firstName: first, lastName: last, email: (v.email || '').trim() });
   save();
   toast(`Added ${first} ${last}.`);
   renderDonors();
@@ -298,14 +294,10 @@ function personDialog(hid, p) {
       <label class="f">First name<input name="firstName" required value="${esc(p ? p.firstName : '')}"></label>
       <label class="f">Last name<input name="lastName" required value="${esc(p ? p.lastName : '')}"></label>
       <label class="f wide">Email (optional)<input name="email" type="email" value="${esc(p ? p.email || '' : '')}"></label>
-      <label class="f wide">Year-end letter<select name="letterMode">
-        <option value="individual" ${!p || p.letterMode !== 'household' ? 'selected' : ''}>Own letter</option>
-        <option value="household" ${p && p.letterMode === 'household' ? 'selected' : ''}>Combined with household</option>
-      </select></label>
     </div>`, v => {
     const first = (v.firstName || '').trim(), last = (v.lastName || '').trim();
     if (!first || !last) return 'Enter a first and last name.';
-    const fields = { firstName: first, lastName: last, email: (v.email || '').trim(), letterMode: v.letterMode === 'household' ? 'household' : 'individual' };
+    const fields = { firstName: first, lastName: last, email: (v.email || '').trim() };
     if (p) Object.assign(p, fields); else data.people.push({ id: newId(), householdId: hid, ...fields });
     save(); renderDonors();
   });
@@ -314,7 +306,7 @@ function personDialog(hid, p) {
 function householdDialog(h) {
   openDialog('Edit household', `
     <div class="grid2">
-      <label class="f wide">Household name (used on combined letters, e.g. "John and Mary Smith")<input name="name" value="${esc(h.name || '')}"></label>
+      <label class="f wide">Household name (a label on the Donors page, e.g. "John and Mary Smith")<input name="name" value="${esc(h.name || '')}"></label>
       <label class="f wide">Street address<input name="address1" value="${esc(h.address1 || '')}"></label>
       <label class="f wide">Apt / line 2<input name="address2" value="${esc(h.address2 || '')}"></label>
       <label class="f">City<input name="city" value="${esc(h.city || '')}"></label>
@@ -363,7 +355,6 @@ function renderLetters() {
   const total = currentLetters.reduce((a, l) => a + l.total, 0);
   const rows = currentLetters.map(l => `<tr class="${l.key === ui.previewKey ? 'sel' : ''}">
       <td>${esc(l.addressee)}${l.household.address1 ? '' : ' <span class="chip">no address</span>'}</td>
-      <td>${l.kind === 'combined' ? 'Combined' : 'Individual'}</td>
       <td class="num">${l.gifts.length}</td>
       <td class="num">${fmtMoney(l.total)}</td>
       <td class="actions"><button class="link" data-action="previewLetter" data-key="${l.key}">Preview</button></td></tr>`).join('');
@@ -383,11 +374,11 @@ function renderLetters() {
             <label><input type="checkbox" data-change="optCombined" ${ui.optCombined ? 'checked' : ''}> One PDF with every letter, for printing in one go</label>
           </div>
           <div style="margin-top:12px"><button class="btn primary" data-action="exportLetters" ${currentLetters.length ? '' : 'disabled'}>Save ${currentLetters.length} letter${currentLetters.length === 1 ? '' : 's'} as PDF…</button></div>
-          <p class="help">Only donors with at least one gift in ${esc(ui.letterYear)} get a letter. Whether a person gets their own letter or shares a household letter is set on the Donors page.</p>
+          <p class="help">Only donors with at least one gift in ${esc(ui.letterYear)} get a letter. Each person gets their own letter, even when they share an address.</p>
         </div>
         <div class="panel">
           <div class="small muted" style="margin-bottom:8px">${currentLetters.length} letter${currentLetters.length === 1 ? '' : 's'} · ${fmtMoney(total)} total monetary giving</div>
-          ${currentLetters.length ? `<table class="grid"><thead><tr><th>Addressed to</th><th>Type</th><th class="num">Gifts</th><th class="num">Total</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="muted">No gifts recorded for this year.</div>'}
+          ${currentLetters.length ? `<table class="grid"><thead><tr><th>Addressed to</th><th class="num">Gifts</th><th class="num">Total</th><th></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="muted">No gifts recorded for this year.</div>'}
         </div>
       </div>
       <div class="panel"><h2>Preview${preview ? ': ' + esc(preview.addressee) : ''}</h2><iframe class="preview" id="preview" sandbox="" title="Letter preview"></iframe></div>
@@ -428,6 +419,18 @@ function renderSettings() {
         ${f('Signer name', 'signerName')}
         ${f('Signer title', 'signerTitle')}
       </div>
+    </div>
+    <div class="panel"><h2>Letter header</h2>
+      <div class="row" style="align-items:center">
+        <div style="border:1px solid var(--line);border-radius:6px;padding:8px;min-width:160px;min-height:70px;display:flex;align-items:center;justify-content:center;background:#fff">${s.logo ? `<img src="${esc(s.logo)}" alt="Letter logo" style="max-height:80px;max-width:240px">` : '<span class="muted small">No logo</span>'}</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button class="btn" data-action="chooseLogo">Choose image…</button>
+          <button class="btn" data-action="defaultLogo">Use the church drawing</button>
+          ${s.logo ? '<button class="btn danger" data-action="removeLogo">Remove logo</button>' : ''}
+        </div>
+        <label class="f grow">Text beside the logo (one line per row)<textarea data-setting="headerText" style="min-height:76px">${esc(s.headerText || '')}</textarea></label>
+      </div>
+      <p class="help">PNG or JPG. A larger, sharper image prints better; it is shown about one inch tall. With no logo, the header shows the church name only.</p>
     </div>
     <div class="panel"><h2>Letter wording</h2>
       <label class="f">Opening paragraph<textarea data-setting="intro">${esc(s.intro)}</textarea></label>
@@ -493,7 +496,6 @@ main.addEventListener('change', e => {
   }
   const c = t.dataset.change;
   if (c === 'giftYear') { ui.giftYear = t.value; document.getElementById('giftList').innerHTML = giftListHtml(); }
-  else if (c === 'letterMode') { person(parseInt(t.dataset.id, 10)).letterMode = t.value; save(); }
   else if (c === 'letterYear') { ui.letterYear = t.value; ui.previewKey = null; renderLetters(); }
   else if (c === 'letterDate') { if (t.value) { ui.letterDate = t.value; renderLetters(); } }
   else if (c === 'optIndividual') ui.optIndividual = t.checked;
@@ -547,6 +549,15 @@ const actions = {
     if (data.funds.length === 1) return toast('At least one fund is required.', true);
     data.funds = data.funds.filter(x => x.id !== id); save(); renderFunds();
   },
+  async chooseLogo() {
+    try {
+      const url = await window.store.chooseLogo();
+      if (!url) return;
+      data.settings.logo = url; data.settings.logoSet = true; save(); renderSettings(); toast('Logo updated.');
+    } catch (e) { toast('Could not use that image: ' + e.message, true); }
+  },
+  defaultLogo() { data.settings.logo = window.DEFAULT_LOGO; data.settings.logoSet = true; save(); renderSettings(); },
+  removeLogo() { data.settings.logo = ''; data.settings.logoSet = true; save(); renderSettings(); },
   previewLetter(_id, el) { ui.previewKey = el.dataset.key; renderLetters(); },
   exportLetters() { exportLetters(); },
   async exportBackup() {
@@ -576,7 +587,12 @@ main.addEventListener('click', e => {
     dataLocation = await window.store.location();
     // A data file made by the first build has blank church details; fill them in once.
     const st = data.settings;
-    if (!st.churchName && !st.address1 && !st.cityStateZip && !st.phone && !st.ein) { Object.assign(st, Logic.CHURCH_DEFAULTS); await window.store.save(data); }
+    let changed = false;
+    if (!st.churchName && !st.address1 && !st.cityStateZip && !st.phone && !st.ein) { Object.assign(st, Logic.CHURCH_DEFAULTS); changed = true; }
+    // Data from before the logo feature: add the header text and the bundled church drawing once.
+    if (st.headerText === undefined) { st.headerText = Logic.CHURCH_DEFAULTS.headerText; changed = true; }
+    if (st.logo === undefined || (st.logo === '' && !st.logoSet)) { st.logo = window.DEFAULT_LOGO; st.logoSet = true; changed = true; }
+    if (changed) await window.store.save(data);
   } catch (e) {
     main.innerHTML = `<div class="notice">The data file could not be read, so the app has stopped rather than risk overwriting it.<br><br>${esc(e.message)}</div>`;
     return;

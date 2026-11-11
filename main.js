@@ -129,6 +129,22 @@ ipcMain.handle('backup:import', async () => {
   return data;
 });
 
+ipcMain.handle('logo:choose', async () => {
+  const res = await dialog.showOpenDialog(mainWindow, {
+    title: 'Choose a logo image',
+    properties: ['openFile'],
+    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg'] }],
+  });
+  if (res.canceled || !res.filePaths[0]) return null;
+  const file = res.filePaths[0];
+  const buf = fs.readFileSync(file);
+  if (buf.length > 5 * 1024 * 1024) throw new Error('The image is larger than 5 MB.');
+  const isPng = buf.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  const isJpg = buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+  if (!isPng && !isJpg) throw new Error('That file is not a PNG or JPG image.');
+  return `data:image/${isPng ? 'png' : 'jpeg'};base64,${buf.toString('base64')}`;
+});
+
 ipcMain.handle('letters:export', async (_e, payload) => {
   const res = await dialog.showOpenDialog(mainWindow, {
     title: 'Choose a folder for the letters',

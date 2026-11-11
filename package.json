@@ -1,6 +1,6 @@
 {
   "name": "church-donations",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Log church donations and produce year-end giving letters",
   "main": "main.js",
   "scripts": {
